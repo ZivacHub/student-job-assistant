@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% set nav = "poslovi" %}
+{% block title %}Dodaj oglas{% endblock %}
+
+{% macro field_error(errors, key, fid) %}
+  {% if errors[key] %}<p class="field__error" id="{{ fid }}-err">{{ errors[key] }}</p>{% endif %}
+{% endmacro %}
+
+{% block main %}
+  <p class="back"><a href="/poslovi">Natrag na poslove</a></p>
+  <h1>Dodaj oglas</h1>
+  <p class="lede">Zalijepite tekst oglasa koji ste vidjeli na Facebooku, WhatsAppu, Njuškalu ili vam ga je netko poslao. Aplikacija ga pročita, vi provjerite što je razumjela, pa se oglas ocijeni kao i svi ostali.</p>
+
+  {% if errors %}
+    <div class="alert alert--error" role="alert" data-error-summary>
+      <p>Oglas nije spremljen. Ispravite:</p>
+      <ul>
+        {% for key, message in errors.items() %}
+          <li><a href="#f-{{ key }}">{{ message }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if step == 1 %}
+    <form class="stack paste" method="post" action="/dodaj/pregled" novalidate>
+      <div class="field">
+        <label for="f-text">Tekst oglasa</label>
+        <textarea id="f-text" name="text" class="pastebox" rows="12" maxlength="{{ max_chars }}" aria-required="true" {% if not errors %}autofocus{% endif %}
+                  aria-describedby="{% if errors.text %}f-text-err {% endif %}f-text-hint"{% if errors.text %} aria-invalid="true"{% endif %}>{{ values.text }}</textarea>
+        {{ field_error(errors, "text", "f-text") }}
+        <p class="hint" id="f-text-hint">Kopirajte cijeli tekst, zajedno s telefonom ili e-adresom ako ih ima.</p>
+      </div>
+      <div class="field">
+        <label for="f-url">Poveznica na oglas (nije obavezno)</label>
+        <input id="f-url" name="url" type="text" inputmode="url" autocomplete="off" maxlength="1000" value="{{ values.url }}" placeholder="https://…"
+               aria-describedby="{% if errors.url %}f-url-err {% endif %}f-url-hint"{% if errors.url %} aria-invalid="true"{% endif %}>
+        {{ field_error(errors, "url", "f-url") }}
+        <p class="hint" id="f-url-hint">Poveznica se samo sprema da je kasnije možete otvoriti. Aplikacija je nikada sama ne otvara (Facebook i Njuškalo se ne čitaju automatski).</p>
+      </div>
+      <div class="actions"><button class="btn btn--primary" type="submit">Pregledaj</button></div>
+    </form>
+
+  {% else %}
+    <form class="stack paste" method="post" action="/dodaj/spremi" novalidate>
+      <input type="hidden" name="text" value="{{ values.text }}">
+      <input type="hidden" name="url" value="{{ values.url }}">
+
+      <section class="section" aria-labelledby="h-razumjela">
+        <h2 id="h-razumjela">Što je aplikacija razumjela</h2>
+        <p class="section__intro">Ispravite što nije točno. Prazno polje znači da se koristi ono što je aplikacija pogodila.</p>
+        {% if preview.shortened %}<p class="hint">Tekst je bio dulji od {{ max_chars }} znakova pa je skraćen.</p>{% endif %}
+
+        <div class="field">
+          <label for="f-title">Naslov</label>
+          <input id="f-title" name="title" type="text" maxlength="{{ max_title }}" value="{{ values.title }}"
+                 {% if errors.title %}aria-invalid="true" aria-describedby="f-title-err"{% endif %}>
+          {{ field_error(errors, "title", "f-title") }}
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="f-employer">Poslodavac</label>
+            <input id="f-employer" name="employer" type="text" maxlength="{{ max_employer }}" value="{{ values.employer }}" placeholder="nije pronađen"
+                   {% if errors.employer %}aria-invalid="true" aria-describedby="f-employer-err"{% endif %}>
+            {{ field_error(errors, "employer", "f-employer") }}
+          </div>
+          <div class="field">
+            <label for="f-city">Mjesto</label>
+            <input id="f-city" name="city" type="text" list="towns" maxlength="{{ max_city }}" value="{{ values.city }}" placeholder="nije pronađeno" autocomplete="off"
+                   {% if errors.city %}aria-invalid="true" aria-describedby="f-city-err"{% endif %}>
+            <datalist id="towns">{% for t in towns %}<option value="{{ t }}">{% endfor %}</datalist>
+            {{ field_error(errors, "city", "f-city") }}
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-pay">Plaća (€ na sat)</label>
+          <input id="f-pay" name="pay" type="text" inputmode="decimal" autocomplete="off" class="input--short" value="{{ values.pay }}" placeholder="npr. 7,50"
+                 {% if errors.pay %}aria-invalid="true" aria-describedby="f-pay-err"{% endif %}>
+          {{ field_error(errors, "pay", "f-pay") }}
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="h-kontakti">
+        <h2 id="h-kontakti">Kako se javiti</h2>
+        {% if preview.contacts %}
+          <ul class="contact-list">
+            {% for kind, value in preview.contacts %}<li>{{ kind_label[kind] }}: <strong>{{ value }}</strong></li>{% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">U tekstu nije pronađen nijedan telefon, e-adresa ni poveznica.</p>
+        {% endif %}
+        <p class="hint">Prepoznati način javljanja: <strong>{{ preview.channel_label }}</strong>. Kontakti se uzimaju samo iz zalijepljenog teksta i ne mogu se ovdje mijenjati; ako nešto fali, dopunite tekst.</p>
+      </section>
+
+      <section class="section" aria-labelledby="h-tekst">
+        <h2 id="h-tekst">Zalijepljeni tekst</h2>
+        <div class="desc">{{ values.text }}</div>
+      </section>
+
+      <div class="actions">
+        <button class="btn btn--primary" type="submit">Spremi oglas</button>
+        <button class="btn" type="submit" formaction="/dodaj/uredi" formnovalidate>Promijeni tekst</button>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

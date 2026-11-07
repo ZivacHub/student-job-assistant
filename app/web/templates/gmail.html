@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% set nav = "gmail" %}
+{% block title %}Gmail{% endblock %}
+
+{% block main %}
+  <h1>Gmail</h1>
+  <p class="lede">Ovdje povezujete Gmail da Vam aplikacija šalje obavijesti o novim oglasima na mobitel. Poruke poslodavcima se i dalje ne šalju iz ove stranice, a nikad bez Vašeg odobrenja.</p>
+
+  {% if flash %}<p class="alert alert--ok" role="status">{{ flash }}</p>{% endif %}
+  {% if action_error %}<p class="alert alert--error" role="alert" data-error-summary>{{ action_error }}</p>{% endif %}
+  {% if s.problem %}<p class="alert alert--error" role="alert">{{ s.problem }} Obavijesti su zato isključene. Spremite lozinku ponovno.</p>{% endif %}
+  {% if s.store_error %}<p class="alert alert--error" role="alert">{{ s.store_error }}</p>{% endif %}
+
+  <section class="section" id="stanje" aria-labelledby="h-stanje">
+    <h2 id="h-stanje">Stanje</h2>
+    <dl class="facts facts--wide">
+      <dt>Gmail adresa</dt>
+      <dd>{% if s.address %}{{ s.address }}{% else %}<strong>Nije postavljena.</strong>{% endif %}</dd>
+      <dt>Lozinka</dt>
+      <dd>{% if s.password_saved %}Spremljena u Windows Credential Manager{% if checked %} (zadnja provjera {{ checked }}){% endif %}.{% else %}<strong>Nije spremljena.</strong>{% endif %}</dd>
+      <dt>Probna poruka</dt>
+      <dd>{% if s.test_sent %}Poslana.{% else %}Još nije poslana.{% endif %}</dd>
+      <dt>Mobitel zazvonio</dt>
+      <dd>{% if s.phone_result == "yes" %}Da.{% elif s.phone_result == "no" %}Ne.{% else %}Još niste javili.{% endif %}</dd>
+      <dt>Obavijesti</dt>
+      <dd>{% if s.alerts_on %}<strong>Uključene</strong>{% if since %} (za oglase koji su se pojavili nakon {{ since }}){% endif %}.{% else %}Isključene.{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section class="section" id="koraci" aria-labelledby="h-koraci">
+    <h2 id="h-koraci">1. Napravite aplikacijsku lozinku u Google računu</h2>
+    <p>To je posebna lozinka od 16 slova samo za ovu aplikaciju. Vašu običnu lozinku za Gmail nikad ne upisujete ovdje.</p>
+    <ol class="steps">
+      <li>Prijavite se u Google račun kojim želite primati obavijesti i uključite <strong>potvrdu u dva koraka</strong> (ako već nije): <a class="standalone" href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" rel="noopener noreferrer">postavke potvrde u dva koraka (otvara se u novoj kartici)</a>.</li>
+      <li>Otvorite <a class="standalone" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">stranicu za aplikacijske lozinke (otvara se u novoj kartici)</a>, upišite naziv, npr. „Studentski poslovi“, i pritisnite <strong>Izradi</strong>.</li>
+      <li>Google će prikazati 16 slova u četiri skupine. Zalijepite ih u kućicu ispod. Razmaci ne smetaju.</li>
+    </ol>
+    <p class="hint">Što to dopušta: aplikacijska lozinka omogućuje programu da šalje i čita poštu tog računa, ne samo poruke o poslovima. Zato se sprema samo u Windows Credential Manager (isti sef koji Windows koristi za svoje lozinke), nikad u datoteku, zapisnik ili git, i nikad se ne prikazuje ponovno. Možete je u svakom trenutku opozvati na stranici za aplikacijske lozinke u Google računu.</p>
+  </section>
+
+  <section class="section" id="lozinka" aria-labelledby="h-lozinka">
+    <h2 id="h-lozinka">2. Spremite adresu i lozinku</h2>
+    <form class="stack" method="post" action="/gmail/spremi" novalidate>
+      {% if errors %}
+        <div class="alert alert--error" role="alert" data-error-summary>
+          <p>Gmail nije povezan. Ispravite:</p>
+          <ul>{% for key, message in errors.items() %}<li>{% if key in ("address", "password") %}<a href="#f-{{ key }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <div class="field">
+        <label for="f-address">Gmail adresa</label>
+        <input id="f-address" name="address" type="email" inputmode="email" autocomplete="email" maxlength="254" value="{{ address_value }}" aria-describedby="{% if errors.address %}f-address-err {% endif %}f-address-hint"{% if errors.address %} aria-invalid="true"{% endif %}>
+        {% if errors.address %}<p class="field__error" id="f-address-err">{{ errors.address }}</p>{% endif %}
+        <p class="hint" id="f-address-hint">Obavijesti stižu na tu istu adresu: šaljete ih sami sebi.</p>
+      </div>
+      <div class="field">
+        <label for="f-password">Aplikacijska lozinka (16 slova)</label>
+        <input id="f-password" name="password" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" maxlength="40" aria-describedby="{% if errors.password %}f-password-err {% endif %}f-password-hint"{% if errors.password %} aria-invalid="true"{% endif %}>
+        {% if errors.password %}<p class="field__error" id="f-password-err">{{ errors.password }}</p>{% endif %}
+        <p class="hint" id="f-password-hint">Aplikacija se odmah prijavi u Gmail da provjeri lozinku. Tek ako radi, sprema se. Ovdje se nikad više ne prikazuje.</p>
+      </div>
+      <div class="actions"><button class="btn btn--primary" type="submit">Provjeri i spremi</button></div>
+    </form>
+  </section>
+
+  <section class="section" id="telefon" aria-labelledby="h-telefon">
+    <h2 id="h-telefon">3. Pošaljite probnu poruku i provjerite mobitel</h2>
+    {% if s.password_saved %}
+      <p>Pritisnite gumb, pa pogledajte u Gmailu na mobitelu (s mobitelom u ruci, a ne uz računalo) stiže li poruka i zazvoni li ili zavibrira mobitel.</p>
+      <form method="post" action="/gmail/probna"><button class="btn" type="submit">Pošalji probnu poruku sebi</button></form>
+      {% if s.test_sent %}
+        <form class="stack" method="post" action="/gmail/telefon">
+          <fieldset class="choice">
+            <legend>Je li mobitel zazvonio ili zavibrirao kad je poruka stigla?</legend>
+            <div class="actions">
+              <button class="btn" type="submit" name="odgovor" value="da">Da, zazvonio je</button>
+              <button class="btn" type="submit" name="odgovor" value="ne">Ne, nije</button>
+            </div>
+          </fieldset>
+        </form>
+        {% if s.phone_result == "no" %}
+          <p class="alert alert--info">Gmail ne obavještava uvijek o porukama koje šaljete sami sebi. Zato je u koraku 4 ispod besplatna zamjena, mala aplikacija na mobitelu (ntfy).</p>
+        {% endif %}
+      {% endif %}
+    {% else %}
+      <p class="muted">Dostupno kad je lozinka spremljena.</p>
+    {% endif %}
+  </section>
+
+  <section class="section" id="mobitel" aria-labelledby="h-mobitel">
+    <h2 id="h-mobitel">4. Obavijest na mobitel (ntfy)</h2>
+    <p>Gmail obično ne javi mobitelu poruku koju šaljete sami sebi, pa e-mail stiže tiho. <strong>ntfy</strong> je besplatna aplikacija koja to rješava: uz e-mail, aplikacija šalje i jednu kratku obavijest koju mobitel pokaže i zazvoni. E-mail ostaje kakav jest.</p>
+    {% if s.push_on %}
+      <ol class="steps">
+        <li>Na mobitelu otvorite Google Play i instalirajte besplatnu aplikaciju <strong>ntfy</strong> (autor Philipp Heckel).</li>
+        <li>Otvorite ntfy, pritisnite <strong>+</strong> i upišite ovaj naziv teme (server ostavite kakav je, ntfy.sh), pa <strong>Subscribe</strong>:
+          {% if s.push_topic %}<p><code class="topic">{{ s.push_topic }}</code></p>{% else %}<p class="muted">Tema nije dostupna. Isključite i ponovno uključite.</p>{% endif %}
+        </li>
+        <li>Pritisnite „Pošalji probnu obavijest na mobitel" i pogledajte zvoni li mobitel.</li>
+      </ol>
+      <div class="actions">
+        <form method="post" action="/gmail/mobitel/proba"><button class="btn btn--primary" type="submit">Pošalji probnu obavijest na mobitel</button></form>
+        <form method="post" action="/gmail/mobitel"><input type="hidden" name="stanje" value="off"><button class="btn btn--danger" type="submit">Isključi i izbriši temu</button></form>
+      </div>
+      <p class="hint">Naziv teme je tajan kao lozinka: tko ga zna, može čitati Vaše obavijesti. Nikome ga ne dajte i ne objavljujte.</p>
+    {% else %}
+      <p class="hint">Što napušta ovo računalo: samo jedna kratka linija po oglasu (ocjena, naslov oglasa, mjesto, put) i poveznica na sam oglas, preko javnog servera ntfy.sh i pod tajnim nazivom teme koji aplikacija sama izmisli i sprema u Windows Credential Manager. Nikad broj telefona, opis oglasa, nacrt poruke, Vaše ime ni lozinka.</p>
+      <form method="post" action="/gmail/mobitel"><input type="hidden" name="stanje" value="on"><button class="btn btn--primary" type="submit">Uključi obavijesti na mobitel</button></form>
+    {% endif %}
+  </section>
+
+  <section class="section" id="obavijesti" aria-labelledby="h-obavijesti">
+    <h2 id="h-obavijesti">5. Uključite obavijesti u Gmail</h2>
+    <p>Kad su uključene, aplikacija nakon svake provjere izvora šalje na Vašu adresu: <strong>odmah</strong> poruku za oglas s ocjenom {{ notify_threshold }} ili višom, i <strong>skupnu poruku</strong> (najviše jednom u {{ digest_hours }} h) za oglase s ocjenom od {{ digest_threshold }} do {{ notify_threshold - 1 }}. Svaki oglas se javlja samo jednom, i to samo oglasi koji se pojave nakon uključivanja. Granice možete promijeniti na stranici Mjesta i profil.</p>
+    {% if s.alerts_on %}
+      <form method="post" action="/gmail/obavijesti"><input type="hidden" name="stanje" value="off"><button class="btn" type="submit">Isključi obavijesti</button></form>
+    {% elif s.can_switch_on %}
+      <form method="post" action="/gmail/obavijesti"><input type="hidden" name="stanje" value="on"><button class="btn btn--primary" type="submit">Uključi obavijesti</button></form>
+    {% else %}
+      <p class="muted">Dostupno nakon što spremite lozinku i pošaljete sebi probnu poruku.</p>
+    {% endif %}
+  </section>
+
+  {% if s.password_saved %}
+    <section class="section" id="ukloni" aria-labelledby="h-ukloni">
+      <h2 id="h-ukloni">Prekid veze</h2>
+      <p>Briše lozinku iz Windows Credential Managera i isključuje obavijesti. Lozinku možete i opozvati u Google računu.</p>
+      <form method="post" action="/gmail/ukloni"><button class="btn btn--danger" type="submit">Ukloni lozinku</button></form>
+    </section>
+  {% endif %}
+{% endblock %}

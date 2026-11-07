@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% set nav = "prijave" %}
+{% block title %}Prijave{% endblock %}
+
+{% block main %}
+  {% set rv = rule_values if rule_values else rules %}
+  <h1>Prijave</h1>
+  <p class="lede">Ovdje čitate, mijenjate i odobravate poruke poslodavcima. Ništa se ne šalje bez Vašeg odobrenja tog točnog teksta.</p>
+
+  {% if flash %}<p class="alert alert--ok" role="status">{{ flash }}</p>{% endif %}
+  {% if action_error %}<p class="alert alert--error" role="alert" data-error-summary>{{ action_error }}</p>{% endif %}
+
+  <section class="section" id="stanje" aria-labelledby="h-stanje">
+    <h2 id="h-stanje">Stanje slanja</h2>
+    <dl class="facts facts--wide">
+      <dt>Probni način</dt>
+      <dd>
+        {% if dry_run %}
+          <strong>Uključen.</strong> Poruke se samo zapisuju u dnevnik, ništa ne odlazi poslodavcu.
+          {% if live_forced_off %}
+            <span class="muted">Prisilno uključen u postavkama programa, pa se stvarno slanje ne može uključiti ovdje.</span>
+          {% elif gmail_connected %}
+            <form class="stack switchlive" method="post" action="/prijave/stvarno-slanje">
+              <input type="hidden" name="stanje" value="on">
+              <label class="check"><input type="checkbox" name="potvrda" value="da"> <span>Razumijem: kad uključim stvarno slanje, svaka poruka koju odobrim stvarno odlazi poslodavcu nakon roka za poništavanje. Ništa ne odlazi bez mog odobrenja tog točnog teksta.</span></label>
+              <div class="actions"><button class="btn btn--danger" type="submit">Uključi stvarno slanje</button></div>
+            </form>
+          {% else %}
+            <span class="muted">Stvarno slanje se može uključiti tek kad je Gmail povezan (stranica <a href="/gmail">Gmail</a>).</span>
+          {% endif %}
+        {% else %}
+          <strong>Isključen: stvarno slanje je uključeno.</strong> Odobrene poruke odlaze poslodavcima kad završi rok za poništavanje. Poruke odobrene u probnom načinu treba odobriti ponovno.
+          <form class="inline" method="post" action="/prijave/stvarno-slanje"><input type="hidden" name="stanje" value="off"><button class="btn" type="submit">Vrati u probni način</button></form>
+        {% endif %}
+      </dd>
+      <dt>Gmail</dt>
+      <dd>{% if gmail_ready %}Postavljen. Poruke poslodavcima odlaze samo kad je uključeno stvarno slanje i kad odobrite tu poruku.{% else %}<strong>Nije postavljeno.</strong> Dok se Gmail ne poveže (<a href="/gmail">stranica Gmail</a>), ništa se ne može poslati, ni probno ni stvarno.{% endif %}</dd>
+      <dt>Zaustavi slanje</dt>
+      <dd>
+        {% if paused %}
+          <strong>Slanje je zaustavljeno.</strong> Ništa ne odlazi dok ga ne pustite.
+          <form class="inline" method="post" action="/prijave/nastavi"><button class="btn" type="submit">Nastavi slanje</button></form>
+        {% else %}
+          Slanje nije zaustavljeno. Ovaj gumb odmah zaustavlja svako slanje.
+          <form class="inline" method="post" action="/prijave/zaustavi"><button class="btn btn--danger" type="submit">Zaustavi slanje</button></form>
+        {% endif %}
+      </dd>
+    </dl>
+
+    <form class="stack" method="post" action="/prijave/pravila" id="pravila" novalidate>
+      <h3 class="subhead">Pravila slanja</h3>
+      {% if errors %}
+        <div class="alert alert--error" role="alert" data-error-summary>
+          <p>Pravila nisu spremljena. Ispravite:</p>
+          <ul>{% for key, message in errors.items() %}<li><a href="#f-{{ key }}">{{ message }}</a></li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <div class="row row--3">
+        <div class="field">
+          <label for="f-daily_cap">Najviše prijava na dan</label>
+          <input id="f-daily_cap" name="daily_cap" type="text" inputmode="numeric" maxlength="3" value="{{ rv.daily_cap }}" aria-describedby="{% if errors.daily_cap %}f-daily_cap-err {% endif %}f-daily_cap-hint"{% if errors.daily_cap %} aria-invalid="true"{% endif %}>
+          {% if errors.daily_cap %}<p class="field__error" id="f-daily_cap-err">{{ errors.daily_cap }}</p>{% endif %}
+          <p class="hint" id="f-daily_cap-hint">Od {{ rule_limits.cap[0] }} do {{ rule_limits.cap[1] }}. Zaštita da ne pošaljete previše poruka u jednom danu.</p>
+        </div>
+        <div class="field">
+          <label for="f-cooldown_days">Razmak prema istom poslodavcu (dana)</label>
+          <input id="f-cooldown_days" name="cooldown_days" type="text" inputmode="numeric" maxlength="3" value="{{ rv.cooldown_days }}" aria-describedby="{% if errors.cooldown_days %}f-cooldown_days-err {% endif %}f-cooldown_days-hint"{% if errors.cooldown_days %} aria-invalid="true"{% endif %}>
+          {% if errors.cooldown_days %}<p class="field__error" id="f-cooldown_days-err">{{ errors.cooldown_days }}</p>{% endif %}
+          <p class="hint" id="f-cooldown_days-hint">Od {{ rule_limits.cooldown[0] }} do {{ rule_limits.cooldown[1] }}. Istom poslodavcu ili na istu adresu ne piše se ponovno prije toga. 0 znači bez ograničenja.</p>
+        </div>
+        <div class="field">
+          <label for="f-undo_minutes">Vrijeme za poništavanje (minuta)</label>
+          <input id="f-undo_minutes" name="undo_minutes" type="text" inputmode="numeric" maxlength="3" value="{{ rv.undo_minutes }}" aria-describedby="{% if errors.undo_minutes %}f-undo_minutes-err {% endif %}f-undo_minutes-hint"{% if errors.undo_minutes %} aria-invalid="true"{% endif %}>
+          {% if errors.undo_minutes %}<p class="field__error" id="f-undo_minutes-err">{{ errors.undo_minutes }}</p>{% endif %}
+          <p class="hint" id="f-undo_minutes-hint">Od {{ rule_limits.undo[0] }} do {{ rule_limits.undo[1] }}. Toliko dugo nakon odobrenja još možete predomisliti.</p>
+        </div>
+      </div>
+      <div class="actions"><button class="btn" type="submit">Spremi pravila</button></div>
+    </form>
+  </section>
+
+  {% if queue.sections %}
+    {% for key, label, rows in queue.sections %}
+      <section class="section" aria-labelledby="h-{{ key }}">
+        <h2 id="h-{{ key }}">{{ label }} ({{ rows | length }})</h2>
+        <ul class="jobs" aria-label="{{ label }}">
+          {% for r in rows %}
+            <li class="job job--{{ r.job.band }}">
+              <p class="job__score"><span class="visually-hidden">Ocjena: </span>{{ r.job.score if r.job.score is not none else "–" }}</p>
+              <div class="job__main">
+                <h3 class="job__title"><a href="/prijave/{{ r.application.id }}">{{ r.job.title }}</a></h3>
+                {% set who = [r.job.employer, r.job.city] | select | list %}
+                {% if who %}<p class="job__who">{{ who | join(" · ") }}</p>{% endif %}
+                <p class="job__aside">Prima: {{ r.application.to_email }}{% if r.note %} · {{ r.note }}{% endif %}</p>
+              </div>
+              <div class="job__facts">
+                <p class="job__travel">
+                  {% if r.job.travel_minutes is not none %}<strong>{% if r.job.travel_approx %}oko {% endif %}{{ r.job.travel_minutes }} min</strong> {{ r.job.travel_how }}
+                  {% elif r.job.travel_city_only %}<span class="muted">Put nije poznat: oglas navodi samo grad</span>
+                  {% elif r.job.travel_unknown %}<span class="muted">Put nije izračunat</span>{% endif %}
+                </p>
+                <p class="job__pay">{% if r.job.pay %}{{ r.job.pay }}{% else %}<span class="muted">Plaća nije navedena</span>{% endif %}</p>
+                <p class="job__channel"><span class="badge badge--{{ r.application.state }}">{{ r.state_label }}</span></p>
+                <p class="job__age">{{ r.job.age }}{% if r.job.source %}<span class="job__source">{{ r.job.source }}</span>{% endif %}</p>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+  {% else %}
+    <div class="empty">
+      <p class="empty__title">Još nema nacrta.</p>
+      <p>Nacrt se priprema za svaki oglas koji ima e-adresu u samom oglasu i ocjenu od {{ threshold }} ili više. Čim se takav oglas pojavi, nacrt će biti ovdje. Za druge oglase nacrt možete sami pripremiti na stranici oglasa.</p>
+    </div>
+  {% endif %}
+{% endblock %}

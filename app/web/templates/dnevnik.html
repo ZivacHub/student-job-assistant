@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set nav = "dnevnik" %}
+{% block title %}Dnevnik{% endblock %}
+
+{% macro page_link(group, page) -%}
+  /dnevnik{% if group != "sve" or page > 1 %}?{% if group != "sve" %}skupina={{ group }}{% if page > 1 %}&amp;{% endif %}{% endif %}{% if page > 1 %}stranica={{ page }}{% endif %}{% endif %}
+{%- endmacro %}
+
+{% block main %}
+  <h1>Dnevnik</h1>
+  <p class="lede">Što je aplikacija radila, od najnovijeg. Ovdje vidite je li provjera uspjela, koji su oglasi stigli i što ste vi napravili.</p>
+
+  <form class="filters filters--log" method="get" action="/dnevnik" aria-label="Filtriranje dnevnika">
+    <div class="field">
+      <label for="f-skupina">Prikaži</label>
+      <select id="f-skupina" name="skupina">
+        {% for key, name in groups.items() %}<option value="{{ key }}" {% if log.group == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn btn--primary" type="submit">Primijeni</button>
+      {% if log.group != "sve" %}<a class="btn" href="/dnevnik">Poništi</a>{% endif %}
+    </div>
+  </form>
+
+  {% if log.entries %}
+    <ol class="log" aria-label="Događaji">
+      {% for e in log.entries %}
+        <li class="log__item log__item--{{ e.level }}">
+          <p class="log__when">{{ e.when }}</p>
+          <p class="log__text">
+            {% if e.level == "warn" %}<span class="badge badge--warn">Upozorenje</span> {% elif e.level == "bad" %}<span class="badge badge--bad">Problem</span> {% endif %}{{ e.text }}
+            {% if e.job_id %}<a href="/poslovi/{{ e.job_id }}">Otvori oglas<span class="visually-hidden"> {{ e.job_title }}</span></a>{% endif %}
+          </p>
+        </li>
+      {% endfor %}
+    </ol>
+    {% if log.pages > 1 %}
+      <nav class="pager" aria-label="Stranice dnevnika">
+        {% if log.page > 1 %}<a class="btn" rel="prev" href="{{ page_link(log.group, log.page - 1) }}">Noviji</a>{% endif %}
+        <p>Stranica {{ log.page }} od {{ log.pages }}</p>
+        {% if log.page < log.pages %}<a class="btn" rel="next" href="{{ page_link(log.group, log.page + 1) }}">Stariji</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% else %}
+    <div class="empty">
+      <p class="empty__title">{% if log.group == "sve" %}Dnevnik je prazan.{% else %}Nema događaja u ovoj skupini.{% endif %}</p>
+      <p>{% if log.group == "sve" %}Događaji se pojavljuju čim aplikacija prvi put provjeri izvore.{% else %}<a href="/dnevnik">Prikaži sve događaje</a>.{% endif %}</p>
+    </div>
+  {% endif %}
+{% endblock %}

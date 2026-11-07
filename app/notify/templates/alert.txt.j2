@@ -1,0 +1,90 @@
+NOVI OGLAS: {{ title }}
+Ocjena: {{ score }}/100
+{% if job.employer %}Poslodavac: {{ job.employer }}
+{% endif %}
+{% if job.city %}Mjesto: {{ job.city }}{% if job.address %} ({{ job.address }}){% endif %}
+
+{% endif %}
+{% if pay %}Plaća: {{ pay }}
+{% endif %}
+{% if posted %}Objavljeno: {{ posted }}
+{% endif %}
+{% if expires %}Rok prijave: {{ expires }}
+{% endif %}
+{% if reasons %}
+
+ZAŠTO JE OVO DOBRA PONUDA
+{% for r in reasons %}
+- {{ r }}
+{% endfor %}
+{% endif %}
+{% if description %}
+
+OPIS OGLASA
+{{ description }}
+{% endif %}
+
+
+KAKO SE JAVITI
+{% if channel == "email" and emails %}
+Prijava e-poštom na: {{ emails[0].value }}
+{% elif channel == "phone" and phones %}
+Nazovite: {% for p in phones %}{{ p.shown }} (tel:{{ p.e164 }}){% if not p.from_ad %} [nije iz oglasa, upisano ručno]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+
+Što reći: {{ script }}
+{% elif channel == "site" %}
+Prijava preko stranice oglasa{% if links %}: {{ links[0].value }}{% elif job_url %}: {{ job_url }}{% endif %}
+
+{% else %}
+U oglasu nije naveden način prijave. Otvorite oglas i provjerite.
+{% endif %}
+{% if channel != "email" and emails %}
+Ima i e-pošta: {{ emails[0].value }}
+{% endif %}
+{% if channel != "phone" and phones %}
+Telefon: {% for p in phones %}{{ p.shown }}{% if not p.from_ad %} [nije iz oglasa, upisano ručno]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+
+{% endif %}
+{% if draft %}
+
+PREDLOŽENA PORUKA POSLODAVCU
+(Ništa se ne šalje dok vi ne odobrite.)
+Prima: {{ draft.to_email }}
+Predmet: {{ draft.subject }}
+{% if draft.cv_label %}Životopis: {{ draft.cv_label }}
+{% endif %}
+
+{{ draft.body }}
+{% if approval_marker %}
+
+ODOBRENJE S MOBITELA
+Odgovorite na ovu poruku: u prvom retku napišite samo DA, pa će se predložena poruka poslati točno ovako.
+Želite li promijeniti tekst: u prvom retku DA, a ispod njega novi tekst cijele poruke.
+Odgovorite NE ako ne želite poslati ovu poruku.
+Kod: {{ approval_marker }} (vrijedi 24 sata, upotrebljava se samo jednom; neka ostane u naslovu odgovora).
+{% endif %}
+{% endif %}
+
+
+O POSLODAVCU
+{% if company and (company.phone or company.director_name) %}
+{% if company.phone %}Telefon: {{ company.phone }} [upisano ručno]
+{% endif %}
+{% if company.director_name %}Direktor/ica: {{ company.director_name }}{% if company.director_role %} ({{ company.director_role }}){% endif %}
+
+{% endif %}
+{% if company.note %}Bilješka: {{ company.note }}
+{% endif %}
+{% elif companywall_url %}
+Nema podataka o firmi. Pronađite telefon i direktora (otvara se u vašem pregledniku):
+{{ companywall_url }}
+{% else %}
+Nema podataka o poslodavcu.
+{% endif %}
+
+
+Otvorite u aplikaciji (radi na računalu na kojem aplikacija radi): {{ open_url }}
+{% if job_url %}
+Izvorni oglas: {{ job_url }}
+{% endif %}
+Ništa se ne šalje poslodavcu dok vi to ne odobrite.

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% set nav = nav | default("poslovi") %}
+{% block title %}{{ missing or "Oglas nije pronađen" }}{% endblock %}
+
+{% block main %}
+  <h1>{{ missing or "Oglas nije pronađen" }}</h1>
+  <div class="empty">
+    <p class="empty__title">Toga nema.</p>
+    <p>Možda je adresa pogrešno upisana. Vratite se na popis i otvorite ga odande.</p>
+    <p><a class="btn btn--primary" href="{{ back_url or "/poslovi" }}">{{ back_label or "Natrag na poslove" }}</a></p>
+  </div>
+{% endblock %}

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="hr">
+<body style="margin:0;padding:16px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;color:#14171f;background:#f7f8fa">
+<div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e1e4ea;border-radius:8px;padding:16px">
+  <p style="margin:0 0 4px;font-size:13px;color:#5b6475">NOVI OGLAS · ocjena <strong>{{ score }}/100</strong></p>
+  <h1 style="margin:0 0 8px;font-size:20px">{{ title }}</h1>
+  <p style="margin:0 0 12px;color:#5b6475">
+    {% if job.employer %}{{ job.employer }}{% endif %}
+    {% if job.city %} · {{ job.city }}{% if job.address %} ({{ job.address }}){% endif %}{% endif %}
+    {% if pay %} · {{ pay }}{% endif %}
+  </p>
+  {% if posted or expires %}
+  <p style="margin:0 0 12px;font-size:14px;color:#5b6475">
+    {% if posted %}Objavljeno: {{ posted }}{% endif %}{% if expires %} · Rok prijave: {{ expires }}{% endif %}
+  </p>
+  {% endif %}
+
+  {% if reasons %}
+  <h2 style="font-size:15px;margin:16px 0 4px">Zašto je ovo dobra ponuda</h2>
+  <ul style="margin:0;padding-left:20px">{% for r in reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if description %}
+  <h2 style="font-size:15px;margin:16px 0 4px">Opis oglasa</h2>
+  <p style="margin:0;white-space:pre-line">{{ description }}</p>
+  {% endif %}
+
+  <h2 style="font-size:15px;margin:16px 0 4px">Kako se javiti</h2>
+  {% if channel == "email" and emails %}
+  <p style="margin:0">Prijava e-poštom na: <strong>{{ emails[0].value }}</strong></p>
+  {% elif channel == "phone" and phones %}
+  <p style="margin:0">Nazovite:
+    {% for p in phones %}<a href="tel:{{ p.e164 }}" style="font-size:20px;font-weight:bold">{{ p.shown }}</a>{% if not p.from_ad %} <span style="color:#a16207">(nije iz oglasa, upisano ručno)</span>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  <p style="margin:8px 0 0"><em>Što reći:</em> {{ script }}</p>
+  {% elif channel == "site" %}
+  <p style="margin:0">Prijava preko stranice oglasa{% if links %}: <a href="{{ links[0].value }}">{{ links[0].value }}</a>{% elif job_url %}: <a href="{{ job_url }}">{{ job_url }}</a>{% endif %}</p>
+  {% else %}
+  <p style="margin:0">U oglasu nije naveden način prijave. Otvorite oglas i provjerite.</p>
+  {% endif %}
+  {% if channel != "email" and emails %}<p style="margin:4px 0 0">Ima i e-pošta: {{ emails[0].value }}</p>{% endif %}
+  {% if channel != "phone" and phones %}<p style="margin:4px 0 0">Telefon: {% for p in phones %}<a href="tel:{{ p.e164 }}">{{ p.shown }}</a>{% if not p.from_ad %} (nije iz oglasa, upisano ručno){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+
+  {% if draft %}
+  <h2 style="font-size:15px;margin:16px 0 4px">Predložena poruka poslodavcu</h2>
+  <p style="margin:0 0 4px;color:#b42318"><strong>Ništa se ne šalje dok vi ne odobrite.</strong></p>
+  <div style="border:1px solid #e1e4ea;border-radius:8px;padding:12px;background:#f7f8fa">
+    <p style="margin:0 0 4px;font-size:14px;color:#5b6475">Prima: {{ draft.to_email }}{% if draft.cv_label %} · Životopis: {{ draft.cv_label }}{% endif %}</p>
+    <p style="margin:0 0 8px"><strong>Predmet:</strong> {{ draft.subject }}</p>
+    <p style="margin:0;white-space:pre-line">{{ draft.body }}</p>
+  </div>
+  {% if approval_marker %}
+  <h2 style="font-size:15px;margin:16px 0 4px">Odobrenje s mobitela</h2>
+  <p style="margin:0 0 4px">Odgovorite na ovu poruku: u prvom retku napišite samo <strong>DA</strong>, pa će se predložena poruka poslati točno ovako.</p>
+  <p style="margin:0 0 4px">Želite li promijeniti tekst: u prvom retku <strong>DA</strong>, a ispod njega novi tekst cijele poruke.</p>
+  <p style="margin:0 0 4px">Odgovorite <strong>NE</strong> ako ne želite poslati ovu poruku.</p>
+  <p style="margin:0;font-size:13px;color:#5b6475">Kod: {{ approval_marker }} (vrijedi 24 sata, upotrebljava se samo jednom; neka ostane u naslovu odgovora).</p>
+  {% endif %}
+  {% endif %}
+
+  <h2 style="font-size:15px;margin:16px 0 4px">O poslodavcu</h2>
+  {% if company and (company.phone or company.director_name) %}
+  <p style="margin:0">
+    {% if company.phone %}Telefon: <a href="tel:{{ company.phone }}">{{ company.phone }}</a> <span style="color:#a16207">(upisano ručno)</span><br>{% endif %}
+    {% if company.director_name %}Direktor/ica: {{ company.director_name }}{% if company.director_role %} ({{ company.director_role }}){% endif %}<br>{% endif %}
+    {% if company.note %}Bilješka: {{ company.note }}{% endif %}
+  </p>
+  {% elif companywall_url %}
+  <p style="margin:0">Nema podataka o firmi. <a href="{{ companywall_url }}">Pronađite telefon i direktora</a> (otvara se u vašem pregledniku).</p>
+  {% else %}
+  <p style="margin:0">Nema podataka o poslodavcu.</p>
+  {% endif %}
+
+  <p style="margin:16px 0 0;font-size:14px"><a href="{{ open_url }}">Otvori u aplikaciji</a> (radi na računalu na kojem aplikacija radi){% if job_url %} · <a href="{{ job_url }}">Izvorni oglas</a>{% endif %}</p>
+  <p style="margin:8px 0 0;font-size:13px;color:#5b6475">Ništa se ne šalje poslodavcu dok vi to ne odobrite.</p>
+</div>
+</body>
+</html>

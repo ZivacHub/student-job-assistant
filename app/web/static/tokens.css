@@ -1,0 +1,57 @@
+/* Design tokens for Student Job Assistant. Single source of truth: DESIGN.md. */
+:root {
+  color-scheme: light;
+
+  /* type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+
+  /* spacing (4/8 grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* motion: one strong ease-out for everything (the built-in ones are too weak) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* shape */
+  --radius: 8px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 2px 8px rgb(0 0 0 / 0.06);
+
+  /* light theme */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --border: #e1e4ea;
+  --text: #14171f;
+  --text-muted: #5b6475;
+  --accent: #2257d6;
+  --accent-contrast: #ffffff;
+  --score-high: #15803d;
+  --score-mid: #a16207;
+  --score-low: #b42318;
+}
+
+/* Light is the default and never follows the computer's own setting. Dark is chosen with the
+   button in the top bar (static/theme.js keeps the choice in this browser). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1218;
+  --surface: #171b23;
+  --border: #2a303c;
+  --text: #e8ebf2;
+  --text-muted: #9aa4b6;
+  --accent: #7aa2ff;
+  --accent-contrast: #0f1218;
+  --score-high: #4ade80;
+  --score-mid: #facc15;
+  --score-low: #f87171;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+

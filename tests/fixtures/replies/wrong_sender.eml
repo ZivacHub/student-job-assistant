@@ -1,0 +1,15 @@
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@example.org header.s=sel header.b=Abc;
+       spf=pass smtp.mailfrom=someone@example.org;
+       dmarc=pass (p=NONE) header.from=example.org
+From: Neko Drugi <someone@example.org>
+To: ivan.test@gmail.com
+Subject: Re: [87] Konobar vikend - Osijek - e-mail [SJA-@@CODE@@]
+In-Reply-To: @@ALERT_ID@@
+References: @@ALERT_ID@@
+Message-ID: @@MSGID@@
+Date: Tue, 03 Nov 2026 19:05:08 +0100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+DA

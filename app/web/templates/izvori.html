@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% set nav = "izvori" %}
+{% block title %}Izvori{% endblock %}
+{% block head %}{% if auto_refresh %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+
+{% block main %}
+  <h1>Izvori</h1>
+  <p class="lede">Odakle aplikacija uzima oglase i radi li sve kako treba. Provjere se rade same dok je program pokrenut.</p>
+
+  {% if flash %}<p class="alert alert--ok" role="status">{{ flash }}</p>{% endif %}
+  {% if auto_refresh %}<p class="note">Stranica se sama osvježava dok traje provjera. <a href="{{ stop_auto_url }}">Zaustavi automatsko osvježavanje</a></p>{% endif %}
+  {% if error and not error_key %}<p class="alert alert--error" role="alert" data-error-summary>{{ error }}</p>{% endif %}
+
+  <div class="layout-single">
+    <section class="section" aria-labelledby="h-stanje">
+      <h2 id="h-stanje">Stanje programa</h2>
+      <dl class="facts facts--wide">
+        <dt>Slanje poslodavcima</dt>
+        <dd>
+          {% if dry_run %}<strong>Isključeno.</strong> Ništa se ne šalje poslodavcima, a kad se slanje uključi, ništa neće otići bez vašeg odobrenja tog točnog teksta.
+          {% else %}<strong>Uključeno.</strong> Ništa ne ide poslodavcu bez vašeg odobrenja tog točnog teksta.{% endif %}
+        </dd>
+        <dt>Gmail</dt>
+        <dd><strong>Nije postavljeno.</strong> Postavlja se zajedno s vama; lozinku upisujete sami. Do tada obavijesti ne stižu e-poštom, a oglase vidite ovdje.</dd>
+        <dt>Automatsko provjeravanje</dt>
+        <dd>{% if scheduler_on %}<strong>Radi</strong> dok je ovaj program pokrenut (crno prozorče mora ostati otvoreno).{% else %}<strong>Nije uključeno</strong> u ovom pokretanju programa.{% endif %}</dd>
+        <dt>Tko može otvoriti stranice</dt>
+        <dd>Samo ovo računalo ({{ host }}:{{ port }}).</dd>
+        <dt>Obavijesti i pragovi</dt>
+        <dd>Postavljaju se u <a href="/mjesta">Mjesta i profil</a> (od koje ocjene oglas dolazi odmah, tihi sati).</dd>
+      </dl>
+    </section>
+
+    <section class="section" aria-labelledby="h-izvori">
+      <h2 id="h-izvori">Izvori oglasa</h2>
+      {% if rows %}
+        <ul class="sources">
+          {% for r in rows %}
+            <li class="source" id="izvor-{{ r.key }}">
+              <div class="source__head">
+                <h3 class="source__name">{{ r.name }}</h3>
+                <span class="status status--{{ r.state }}">{{ r.state_label }}</span>
+              </div>
+
+              {% if r.manual %}
+                <p class="source__line">Oglasi koje ste sami dodali (Facebook, WhatsApp, Njuškalo, preporuke). Ukupno: <strong>{{ r.total_ads }}</strong>.</p>
+                <p><a class="btn btn--primary" href="/dodaj">Dodaj oglas</a></p>
+              {% else %}
+                <p class="source__line">
+                  {% if r.last_run %}Zadnja provjera: <strong>{{ r.last_run }}</strong> · novih oglasa: <strong>{{ r.last_items }}</strong>{% else %}Još nije bilo nijedne provjere{% endif %}
+                  · oglasa ukupno: <strong>{{ r.total_ads }}</strong> (u zadnja 24 h: {{ r.ads_24h }})
+                  {% if r.next_run %}· sljedeća provjera: {{ r.next_run }}{% endif %}
+                </p>
+                {% if r.explanation %}<p class="source__note">{{ r.explanation }}</p>{% endif %}
+                {% if r.error %}<p class="source__note source__note--error">Poruka: {{ r.error }}</p>{% endif %}
+                {% if r.first_fill_pending %}<p class="source__note">Prvo punjenje: oglasi koji već postoje spremaju se bez obavijesti, sve dok jedna provjera ne završi bez greške.</p>{% endif %}
+                {% if error and error_key == r.key %}<p class="alert alert--error" role="alert" data-error-summary>{{ error }}</p>{% endif %}
+
+                <div class="source__actions">
+                  <form method="post" action="/izvori/{{ r.key }}/pokreni">
+                    <button class="btn" type="submit" {% if r.running or not r.enabled or not r.runnable %}disabled{% endif %}>Provjeri sada<span class="visually-hidden">: {{ r.name }}</span></button>
+                  </form>
+                  <form class="source__settings" method="post" action="/izvori/{{ r.key }}/postavke">
+                    <label class="check"><input type="checkbox" name="enabled" {% if r.enabled %}checked{% endif %}> Uključeno<span class="visually-hidden">: {{ r.name }}</span></label>
+                    <div class="field field--inline">
+                      <label for="interval-{{ r.key }}">Provjeravaj svakih<span class="visually-hidden">: {{ r.name }}</span></label>
+                      <select id="interval-{{ r.key }}" name="interval">
+                        {% for n in intervals %}<option value="{{ n }}" {% if r.interval == n %}selected{% endif %}>{{ n }} min</option>{% endfor %}
+                        {% if r.interval not in intervals %}<option value="{{ r.interval }}" selected>{{ r.interval }} min (stara vrijednost)</option>{% endif %}
+                      </select>
+                    </div>
+                    <button class="btn" type="submit">Spremi<span class="visually-hidden">: {{ r.name }}</span></button>
+                  </form>
+                </div>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty">
+          <p class="empty__title">Još nema izvora.</p>
+          <p>Pojavit će se čim se program prvi put pokrene s uključenim provjeravanjem.</p>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

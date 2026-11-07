@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+{% set nav = "mjesta" %}
+{% block title %}Mjesta i profil{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+  {% if streets.auto_refresh %}<meta http-equiv="refresh" content="5">{% endif %}
+{% endblock %}
+
+{# ---------- one place form (used for editing and for adding) ---------- #}
+{% macro place_form(place, values, errs, fid) %}
+  {% set v_label = values.label if values else (place.label if place else ("Dom" if not places else "")) %}
+  {% set v_kind = values.kind if values else (place.kind if place else ("home" if not places else "other")) %}
+  {% set v_lat = values.lat if values else (place.lat if place else none) %}
+  {% set v_lon = values.lon if values else (place.lon if place else none) %}
+  {% set v_town = values.town if values else "" %}
+  {% set v_min = values.minutes if values else (place.max_minutes_by_mode if place else {}) %}
+  {% set v_bonus = values.bonus if values else (place.bonus_points if place else 0) %}
+  {% set v_active = values.active if values else (place.active if place else true) %}
+  <form class="stack" method="post" action="/mjesta/mjesto" data-place-form novalidate>
+    {% if place %}<input type="hidden" name="id" value="{{ place.id }}">{% endif %}
+    {% if errs %}
+      <div class="alert alert--error" role="alert" data-error-summary>
+        <p>Mjesto nije spremljeno. Ispravite:</p>
+        <ul>
+          {% for key, message in errs.items() %}
+            {% set target = {'label': 'label-' ~ fid, 'lat': 'lat-' ~ fid, 'bonus': 'bonus-' ~ fid}.get(key, 'min-' ~ key[4:] ~ '-' ~ fid) %}
+            <li><a href="#{{ target }}">{{ message }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="field">
+      <label for="label-{{ fid }}">Naziv mjesta</label>
+      <input id="label-{{ fid }}" name="label" type="text" maxlength="60" value="{{ v_label }}" placeholder="npr. Dom" required
+             {% if errs.label %}aria-invalid="true" aria-describedby="label-{{ fid }}-err"{% endif %}>
+      {% if errs.label %}<p class="field__error" id="label-{{ fid }}-err">{{ errs.label }}</p>{% endif %}
+    </div>
+
+    <div class="field">
+      <label for="kind-{{ fid }}">Vrsta mjesta</label>
+      <select id="kind-{{ fid }}" name="kind">
+        {% for key, name in kinds.items() %}
+          <option value="{{ key }}" {% if v_kind == key %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <fieldset class="field fieldset">
+      <legend>Gdje je to mjesto?</legend>
+      <p class="hint">Odaberite grad ili kliknite točku na karti. Adresa se nikamo ne šalje.</p>
+      <div class="field">
+        <label for="town-{{ fid }}">Grad ili naselje</label>
+        <select id="town-{{ fid }}" name="town" data-town-select>
+          <option value="">Odaberite grad…</option>
+          {% for t in towns %}
+            <option value="{{ t.key }}" data-lat="{{ t.lat }}" data-lon="{{ t.lon }}"
+                    {% if v_town == t.key or (place and not values and place.address == t.name) %}selected{% endif %}>{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="lat-{{ fid }}">Širina</label>
+          <input id="lat-{{ fid }}" name="lat" type="text" inputmode="decimal" autocomplete="off"
+                 value="{{ '%.5f' % v_lat if v_lat is not none else '' }}" data-coord="lat"
+                 {% if errs.lat %}aria-invalid="true" aria-describedby="lat-{{ fid }}-err"{% endif %}>
+        </div>
+        <div class="field">
+          <label for="lon-{{ fid }}">Dužina</label>
+          <input id="lon-{{ fid }}" name="lon" type="text" inputmode="decimal" autocomplete="off"
+                 value="{{ '%.5f' % v_lon if v_lon is not none else '' }}" data-coord="lon">
+        </div>
+      </div>
+      {% if errs.lat %}<p class="field__error" id="lat-{{ fid }}-err">{{ errs.lat }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="field fieldset">
+      <legend>Najviše minuta putovanja do posla</legend>
+      <p class="hint">Ostavite prazno ako tim načinom ne putujete. Tramvaj je procjena (čekanje oko 6 minuta i vožnja oko 17 km/h, bez voznog reda) i vrijedi samo ako tramvaj doista vozi.</p>
+      <div class="minutes">
+        {% for mode, name in modes.items() %}
+          <div class="field">
+            <label for="min-{{ mode }}-{{ fid }}">{{ name }}</label>
+            <input id="min-{{ mode }}-{{ fid }}" name="min_{{ mode }}" type="text" inputmode="numeric" maxlength="3"
+                   value="{{ v_min.get(mode, '') }}" placeholder="min"
+                   {% if errs['min_' ~ mode] %}aria-invalid="true" aria-describedby="min-{{ mode }}-{{ fid }}-err"{% endif %}>
+            {% if errs['min_' ~ mode] %}<p class="field__error" id="min-{{ mode }}-{{ fid }}-err">{{ errs['min_' ~ mode] }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label for="bonus-{{ fid }}">Bonus bodovi (0 do {{ max_bonus }})</label>
+      <input id="bonus-{{ fid }}" name="bonus" type="text" inputmode="numeric" maxlength="2" value="{{ v_bonus }}"
+             {% if errs.bonus %}aria-invalid="true" aria-describedby="bonus-{{ fid }}-err"{% else %}aria-describedby="bonus-{{ fid }}-hint"{% endif %}>
+      <p class="hint" id="bonus-{{ fid }}-hint">Dodatni bodovi za poslove blizu ovog mjesta, npr. kod djevojke ili dečka.</p>
+      {% if errs.bonus %}<p class="field__error" id="bonus-{{ fid }}-err">{{ errs.bonus }}</p>{% endif %}
+    </div>
+
+    <label class="check"><input type="checkbox" name="active" {% if v_active %}checked{% endif %}> Računaj ovo mjesto</label>
+
+    <div class="actions">
+      <button class="btn btn--primary" type="submit">Spremi mjesto{% if place %}<span class="visually-hidden">: {{ place.label }}</span>{% endif %}</button>
+      <button class="btn" type="button" data-close-form>Odustani{% if place %}<span class="visually-hidden">: {{ place.label }}</span>{% endif %}</button>
+      {% if place %}
+        <button class="btn btn--danger" type="submit" formaction="/mjesta/mjesto/{{ place.id }}/obrisi" formnovalidate>Obriši mjesto<span class="visually-hidden">: {{ place.label }}</span></button>
+      {% endif %}
+    </div>
+  </form>
+{% endmacro %}
+
+{% block main %}
+  <h1>Mjesta i profil</h1>
+  <p class="lede">Aplikacija po ovome računa koliko su vam poslovi blizu i koliko vam odgovaraju.</p>
+
+  {% if flash %}
+    <p class="alert alert--ok" role="status">{{ flash }}</p>
+  {% endif %}
+
+  <div class="layout">
+    <div class="layout__content">
+
+      <section class="section" id="mjesta" aria-labelledby="h-mjesta">
+        <h2 id="h-mjesta">Moja mjesta</h2>
+        <p class="section__intro">Dodajte svoj dom i mjesta s kojih možete doći na posao, npr. fakultet ili kod djevojke. Što je posao bliže nekom od mjesta, to ima više bodova.</p>
+
+        {% if places %}
+          <ul class="places">
+            {% for p in places %}
+              {% set is_open = (open_form == p.id) %}
+              <li>
+                <details class="place" {% if is_open %}open{% endif %} data-place-id="{{ p.id }}">
+                  <summary>
+                    <span class="place__name">{{ p.label }}</span>
+                    <span class="place__kind">{{ kinds.get(p.kind, "Drugo") }}{% if not p.active %} · isključeno{% endif %}</span>
+                    <span class="place__meta">{{ p.address or "Točka na karti" }}{% if summaries[p.id] %} · {{ summaries[p.id] }}{% endif %}</span>
+                  </summary>
+                  <div class="place__body">
+                    {{ place_form(p, place_values if is_open else none, errors if is_open else {}, "p" ~ p.id) }}
+                  </div>
+                </details>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="empty">
+            <p class="empty__title">Još nema nijednog mjesta</p>
+            <p>Dodajte svoj dom. Bez njega aplikacija ne zna koliko su vam poslovi daleko pa udaljenost samo grubo procjenjuje.</p>
+          </div>
+        {% endif %}
+
+        <details class="place place--new" {% if open_form == "new" %}open{% endif %} data-place-id="new">
+          <summary class="btn btn--primary">Dodaj mjesto</summary>
+          <div class="place__body">
+            {{ place_form(none, place_values if open_form == "new" else none, errors if open_form == "new" else {}, "new") }}
+          </div>
+        </details>
+      </section>
+
+      <section class="section" id="karta" aria-labelledby="h-karta">
+        <h2 id="h-karta">Karta ulica</h2>
+        {% if streets.error %}
+          <p class="alert alert--error" role="alert" data-error-summary>{{ streets.error }}</p>
+        {% endif %}
+        {% if streets.state == "running" %}
+          <p class="section__intro" role="status"><span class="checked__run">Preuzimanje karte je u tijeku: {{ streets.step or "priprema" }}.</span> Može potrajati nekoliko minuta. Čim završi, ocjene oglasa se ponovno računaju.</p>
+          {% if streets.auto_refresh %}<p class="note">Stranica se sama osvježava dok traje preuzimanje. <a href="{{ streets.stop_auto_url }}">Zaustavi automatsko osvježavanje</a></p>{% endif %}
+          {% if streets.auto_stopped %}<p class="note"><a href="{{ streets.resume_url }}">Osvježi stranicu</a></p>{% endif %}
+        {% elif streets.state == "ready" %}
+          <p class="section__intro">Karta je preuzeta {{ streets.when }} ({{ streets.size_mb }} MB). Vremena putovanja računaju se po stvarnim ulicama, jednosmjernim ulicama, mostovima i semaforima, a ne po zračnoj liniji.</p>
+          {% if streets.needs_buses %}<p class="hint" data-needs-buses>Ova je karta preuzeta prije nego što je dobila autobusne linije. Preuzmite je ponovno (gumb ispod) da se dodaju linije i stanice autobusa; u ocjenama se za sada još ne koriste, to dolazi u idućim koracima.</p>{% endif %}
+          {% if streets.partial %}<p class="hint">Širu kartu glavnih cesta (za vožnju autom do drugih gradova) još niste preuzeli; do tada se za dalja odredišta koristi gruba procjena.</p>{% endif %}
+          <form method="post" action="/mjesta/karta/preuzmi">
+            <button class="btn" type="submit">Preuzmi kartu ponovno</button>
+          </form>
+        {% else %}
+          <p class="section__intro">Vremena putovanja su za sada gruba procjena po zračnoj liniji. Pola sata hoda tako izgleda kao krug od oko 2 km, a stvarni put ide ulicama, preko mostova i kroz semafore.</p>
+          <p class="section__intro">Preuzmite kartu ulica pa će aplikacija računati po stvarnim ulicama, a na karti ćete vidjeti područje do kojeg doista stižete. Preuzima se jednom (oko 13 MB) s OpenStreetMapa. Šalje se samo područje karte (Osijek i okolica), nikakvo Vaše mjesto ni adresa.</p>
+          <form method="post" action="/mjesta/karta/preuzmi">
+            <button class="btn btn--primary" type="submit">Preuzmi kartu ulica</button>
+          </form>
+        {% endif %}
+        <p class="hint">Podaci o ulicama: © doprinositelji OpenStreetMapa (licenca ODbL).</p>
+      </section>
+
+      <form class="profile" id="profil" method="post" action="/mjesta/profil" novalidate>
+        {% set pv = profile_values %}
+        {% if errors and not open_form %}
+          <div class="alert alert--error" role="alert" data-error-summary>
+            <p>Profil nije spremljen. Ispravite:</p>
+            <ul>
+              {% for key, message in errors.items() %}
+                {% set target = {'wanted': 'h-posao', 'quiet_start': 'quiet_start'}.get(key, key) %}
+                <li><a href="#{{ target }}">{{ message }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <section class="section" aria-labelledby="h-posao">
+          <h2 id="h-posao">Vi i posao koji tražite</h2>
+
+          <div class="field">
+            <label for="full_name">Ime i prezime</label>
+            <input id="full_name" name="full_name" type="text" maxlength="120" autocomplete="name"
+                   value="{{ pv.full_name if pv else (profile.full_name or '') }}" aria-describedby="full_name-hint">
+            <p class="hint" id="full_name-hint">Piše se u porukama poslodavcima i u onome što govorite kad zovete.</p>
+          </div>
+
+          <div class="field">
+            <label for="tone">Obraćanje poslodavcu</label>
+            {% set cur_tone = pv.tone if pv else profile.tone %}
+            <select id="tone" name="tone">
+              {% for key, name in tones.items() %}<option value="{{ key }}" {% if cur_tone == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="signature">Potpis pod porukama poslodavcima</label>
+            <textarea id="signature" name="signature" rows="3" maxlength="300" aria-describedby="signature-hint">{{ pv.signature if pv else (profile.signature or '') }}</textarea>
+            <p class="hint" id="signature-hint">Npr. ime i broj telefona, svako u svom retku. Ako ostane prazno, ispod poruke piše samo Vaše ime.</p>
+          </div>
+
+          <label class="check"><input type="checkbox" name="has_car" {% if (pv.has_car if pv else profile.has_car) %}checked{% endif %}> Imam auto</label>
+
+          {% set wanted = pv.wanted if pv else (profile.categories_wanted or []) %}
+          {% set excluded = pv.excluded if pv else (profile.categories_excluded or []) %}
+          <fieldset class="field fieldset">
+            <legend>Poslovi koje želim</legend>
+            <p class="hint">Ako ništa ne označite, svi poslovi su jednako dobrodošli.</p>
+            <div class="chips">
+              {% for key, name in categories.items() %}
+                <label class="chip"><input type="checkbox" name="wanted" value="{{ key }}" {% if key in wanted %}checked{% endif %}><span>{{ name }}</span></label>
+              {% endfor %}
+            </div>
+            {% if errors.wanted %}<p class="field__error">{{ errors.wanted }}</p>{% endif %}
+          </fieldset>
+
+          <fieldset class="field fieldset">
+            <legend>Poslovi koje ne želim</legend>
+            <p class="hint">Takvi se oglasi ne prikazuju kao prilika i ne šalju obavijest.</p>
+            <div class="chips">
+              {% for key, name in categories.items() %}
+                <label class="chip chip--no"><input type="checkbox" name="excluded" value="{{ key }}" {% if key in excluded %}checked{% endif %}><span>{{ name }}</span></label>
+              {% endfor %}
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label for="min_pay">Najmanja satnica (€ po satu)</label>
+            <input id="min_pay" name="min_pay" type="text" inputmode="decimal" class="input--short"
+                   value="{{ pv.min_pay if pv and pv.min_pay is not none else ('' if pv else (profile.min_pay_eur_hour if profile.min_pay_eur_hour is not none else '')) }}"
+                   {% if errors.min_pay %}aria-invalid="true" aria-describedby="min_pay-err"{% endif %}>
+            {% if errors.min_pay %}<p class="field__error" id="min_pay-err">{{ errors.min_pay }}</p>{% endif %}
+          </div>
+
+          <div class="field">
+            <label for="availability">Kada mogu raditi</label>
+            <textarea id="availability" name="availability" rows="3" maxlength="500" aria-describedby="availability-hint">{{ pv.availability if pv else (profile.availability or '') }}</textarea>
+            <p class="hint" id="availability-hint">npr. petkom i subotom navečer. U poruci poslodavcu piše kao „Slobodan sam petkom i subotom navečer.“</p>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="h-obavijesti">
+          <h2 id="h-obavijesti">Obavijesti</h2>
+          <p class="section__intro">Svaki oglas ima ocjenu od 0 do 100. Ovdje određujete kada vas aplikacija obavještava.</p>
+          <div class="row row--3">
+            <div class="field">
+              <label for="notify_threshold">Odmah javi od ocjene</label>
+              <input id="notify_threshold" name="notify_threshold" type="text" inputmode="numeric" maxlength="3"
+                     value="{{ pv.notify_threshold if pv else profile.notify_threshold }}"
+                     {% if errors.notify_threshold %}aria-invalid="true" aria-describedby="notify_threshold-err"{% endif %}>
+              {% if errors.notify_threshold %}<p class="field__error" id="notify_threshold-err">{{ errors.notify_threshold }}</p>{% endif %}
+            </div>
+            <div class="field">
+              <label for="digest_threshold">Skupna obavijest od ocjene</label>
+              <input id="digest_threshold" name="digest_threshold" type="text" inputmode="numeric" maxlength="3"
+                     value="{{ pv.digest_threshold if pv else profile.digest_threshold }}"
+                     {% if errors.digest_threshold %}aria-invalid="true" aria-describedby="digest_threshold-err"{% endif %}>
+              {% if errors.digest_threshold %}<p class="field__error" id="digest_threshold-err">{{ errors.digest_threshold }}</p>{% endif %}
+            </div>
+            <div class="field">
+              <label for="digest_interval_hours">Skupno najviše svakih (sati)</label>
+              <input id="digest_interval_hours" name="digest_interval_hours" type="text" inputmode="numeric" maxlength="2"
+                     value="{{ pv.digest_interval_hours if pv else profile.digest_interval_hours }}"
+                     {% if errors.digest_interval_hours %}aria-invalid="true" aria-describedby="digest_interval_hours-err"{% endif %}>
+              {% if errors.digest_interval_hours %}<p class="field__error" id="digest_interval_hours-err">{{ errors.digest_interval_hours }}</p>{% endif %}
+            </div>
+          </div>
+          <p class="hint">Oglasi s ocjenom između ove dvije granice stižu zajedno u jednoj skupnoj poruci. Ispod nje vidite ih samo u aplikaciji.</p>
+
+          <fieldset class="field fieldset">
+            <legend>Tihi sati</legend>
+            <p class="hint">Prazno znači da obavijesti stižu uvijek. U tihim satima hitne obavijesti čekaju kraj tihih sati. Prva javljanja često odlučuju tko dobije posao, zato su tihi sati prema zadanom isključeni.</p>
+            <div class="row">
+              <div class="field">
+                <label for="quiet_start">Od</label>
+                <input id="quiet_start" name="quiet_start" type="time" value="{{ (pv.quiet_start if pv else profile.quiet_start) or '' }}">
+              </div>
+              <div class="field">
+                <label for="quiet_end">Do</label>
+                <input id="quiet_end" name="quiet_end" type="time" value="{{ (pv.quiet_end if pv else profile.quiet_end) or '' }}">
+              </div>
+            </div>
+            {% if errors.quiet_start %}<p class="field__error">{{ errors.quiet_start }}</p>{% endif %}
+          </fieldset>
+        </section>
+
+        <section class="section" aria-labelledby="h-cv">
+          <h2 id="h-cv">Životopisi</h2>
+          <p class="section__intro">Za svaki oglas bira se jedan životopis: najprije onaj čije se riječi pojavljuju u oglasu, zatim onaj za državu oglasa, a inače zadani.</p>
+          {% if profile.cvs %}
+            <ul class="cvs">
+              {% for cv in profile.cvs %}
+                {% set rule = pv.cv_rules.get(cv.id, {}) if pv else (cv.rule or {}) %}
+                {% set is_default = (pv.default_cv == cv.id) if pv else cv.is_default %}
+                <li class="cv">
+                  <p class="cv__name">{{ cv.label }} <span class="cv__lang">{{ "hrvatski" if cv.language == "hr" else "engleski" }}</span></p>
+                  <label class="check"><input type="radio" name="cv_default" value="{{ cv.id }}" {% if is_default %}checked{% endif %}> Zadani životopis</label>
+                  <div class="row">
+                    <div class="field">
+                      <label for="cv_{{ cv.id }}_country">Koristi za</label>
+                      <select id="cv_{{ cv.id }}_country" name="cv_{{ cv.id }}_country">
+                        {% for key, name in cv_countries.items() %}<option value="{{ key }}" {% if rule.get("country", "") == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="cv_{{ cv.id }}_keywords">Koristi i kad oglas sadrži riječi</label>
+                      <input id="cv_{{ cv.id }}_keywords" name="cv_{{ cv.id }}_keywords" type="text" maxlength="400"
+                             value="{{ rule.get('keywords_any', []) | join(', ') }}" placeholder="npr. developer, software">
+                    </div>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="empty">
+              <p class="empty__title">Nema životopisa</p>
+              <p>Stavite PDF u mapu data/cvs i pokrenite scripts/seed_profile.py.</p>
+            </div>
+          {% endif %}
+        </section>
+
+        <div class="savebar">
+          <button class="btn btn--primary" type="submit">Spremi profil</button>
+        </div>
+      </form>
+    </div>
+
+    <aside class="layout__map" aria-label="Karta mjesta">
+      {% if map_modes and streets.available %}
+        <fieldset class="fieldset mapmodes" id="map-modes">
+          <legend>Dokle stižem (po ulicama)</legend>
+          <div class="chips">
+            {% for key, name in map_modes %}
+              <label class="chip"><input type="radio" name="area-mode" value="{{ key }}" {% if loop.first %}checked{% endif %}><span>{{ name }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      {% endif %}
+      <div id="map" class="map" data-streets="{{ 'true' if streets.available else 'false' }}" role="application" aria-label="Karta. Kliknite da postavite mjesto koje uređujete."></div>
+      <p class="map__hint" id="map-hint">Otvorite mjesto ili „Dodaj mjesto“, pa kliknite na kartu. {% if streets.available %}Obojeno je područje do kojeg stižete u zadanom vremenu, po ulicama.{% else %}Krug je gruba procjena po zračnoj liniji.{% endif %}</p>
+      <p class="map__hint" id="map-area-note" aria-live="polite"></p>
+      <script type="application/json" id="map-data">{{ map_data | tojson }}</script>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/vendor/leaflet/leaflet.js"></script>
+  <script src="/static/map.js"></script>
+{% endblock %}

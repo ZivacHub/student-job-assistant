@@ -1,0 +1,31 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# personal data (CVs, database, logs, backups)
+data/
+*.db
+*.sqlite*
+*.pdf
+*.docx
+*.log
+
+# tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.unlazy/
+.claude/settings.local.json
+node_modules/
+.playwright-cli/
+.DS_Store
+*.egg-info/
+.claude/audit/
+
+# test reports
+.coverage
+coverage.md
+htmlcov/

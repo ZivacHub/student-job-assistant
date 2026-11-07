@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% set nav = "poslovi" %}
+{% block title %}Poslovi{% endblock %}
+{% block head %}{% if auto_refresh %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+
+{% block main %}
+  {% set steps = score_steps if filters.min_score in score_steps else (score_steps + (filters.min_score,))|sort %}
+  {% set hidden_count = inbox.total - inbox.counts["otvoreni"] %}
+
+  <div class="pagehead">
+    <div>
+      <h1>Poslovi</h1>
+      <p class="lede">{{ inbox.summary }}. Ocjena od 0 do 100 pokazuje koliko oglas odgovara vama, a najbolji su na vrhu.</p>
+      <p class="checked" data-checked>
+        {% if refresh.running %}<span class="checked__run">Provjera izvora je u tijeku…</span>
+        {% elif refresh.last_check %}Zadnja provjera izvora: {{ refresh.last_check }}.
+        {% else %}Izvori još nisu provjereni.{% endif %}
+      </p>
+    </div>
+    <div class="pagehead__actions">
+      <form method="post" action="/poslovi/osvjezi">
+        {% if filters.view != "otvoreni" %}<input type="hidden" name="prikaz" value="{{ filters.view }}">{% endif %}
+        {% if filters.channel %}<input type="hidden" name="kanal" value="{{ filters.channel }}">{% endif %}
+        {% if filters.min_score %}<input type="hidden" name="ocjena" value="{{ filters.min_score }}">{% endif %}
+        <button class="btn btn--primary" type="submit" title="Provjeri izvore ima li novih oglasa" {% if refresh.running %}disabled{% endif %}>{% if refresh.running %}Provjera u tijeku…{% else %}Osvježi{% endif %}</button>
+      </form>
+      <a class="btn" href="/dodaj">Dodaj oglas</a>
+    </div>
+  </div>
+
+  {% if drafts_waiting %}
+    <p class="hint" data-drafts-hint>Čeka Vaše odobrenje: {{ drafts_waiting }} {{ "nacrt" if drafts_waiting % 10 == 1 and drafts_waiting % 100 != 11 else "nacrta" }} poruke poslodavcu. <a href="/prijave">Otvori prijave</a></p>
+  {% endif %}
+
+  {% if streets_missing %}
+    <p class="hint" data-streets-hint>Vremena puta su za sada gruba procjena po zračnoj liniji. Za točna vremena po ulicama <a href="/mjesta#karta">preuzmite kartu ulica</a>.</p>
+  {% endif %}
+
+  {% if refresh_notice %}
+    <div class="alert alert--ok" role="status">
+      <p>{{ refresh_notice }}</p>
+      {% if auto_refresh %}<p><a href="{{ stop_auto_url }}">Zaustavi automatsko osvježavanje</a></p>{% endif %}
+      {% if auto_stopped %}<p><a href="{{ resume_url }}">Osvježi stranicu</a></p>{% endif %}
+    </div>
+  {% endif %}
+
+  {% if broken_sources %}
+    <div class="alert alert--error" role="alert">
+      <p>{{ "Izvor" if broken_sources | length == 1 else "Izvori" }} „{{ broken_sources | join("“, „") }}“ {{ "ne radi" if broken_sources | length == 1 else "ne rade" }} kako treba, pa novi oglasi možda ne stižu.</p>
+      <p><a href="/izvori">Pogledajte što je pošlo po zlu na stranici Izvori</a></p>
+    </div>
+  {% endif %}
+
+  {% if not inbox.has_places %}
+    <div class="alert alert--info">
+      <p>Vrijeme puta još nije izračunato jer niste unijeli nijedno svoje mjesto.</p>
+      <p><a href="/mjesta">Unesite mjesta</a> pa će svaki oglas pokazati koliko je daleko od vas.</p>
+    </div>
+  {% endif %}
+
+  <form class="filters" method="get" action="/poslovi" aria-label="Filtriranje oglasa">
+    <div class="field">
+      <label for="f-prikaz">Prikaži</label>
+      <select id="f-prikaz" name="prikaz">
+        {% for key, name in views.items() %}
+          <option value="{{ key }}" {% if filters.view == key %}selected{% endif %}>{{ name }} ({{ inbox.counts[key] }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-kanal">Kako se javiti</label>
+      <select id="f-kanal" name="kanal">
+        <option value="">Svi načini</option>
+        {% for key, name in channels.items() %}
+          <option value="{{ key }}" {% if filters.channel == key %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-ocjena">Najmanja ocjena</label>
+      <select id="f-ocjena" name="ocjena">
+        {% for step in steps %}
+          <option value="{{ step }}" {% if filters.min_score == step %}selected{% endif %}>{{ "Sve ocjene" if step == 0 else step ~ " i više" }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn btn--primary" type="submit">Primijeni</button>
+      {% if not filters.is_default %}<a class="btn" href="/poslovi">Poništi</a>{% endif %}
+    </div>
+  </form>
+
+  {% if inbox.rows %}
+    <ul class="jobs" aria-label="Popis oglasa">
+      {% for r in inbox.rows %}
+        <li class="job job--{{ r.band }}">
+          <p class="job__score"><span class="visually-hidden">Ocjena: </span>{{ r.score if r.score is not none else "–" }}</p>
+          <div class="job__main">
+            <h2 class="job__title">
+              <a href="/poslovi/{{ r.id }}">{{ r.title }}</a>
+            </h2>
+            {% set who = [r.employer, r.city] | select | list %}
+            {% if who %}<p class="job__who">{{ who | join(" · ") }}</p>{% endif %}
+            {% if r.set_aside %}<p class="job__aside">Ne odgovara: {{ r.set_aside }}.</p>{% endif %}
+          </div>
+          <div class="job__facts">
+            <p class="job__travel">
+              {% if r.travel_minutes is not none %}<strong>{% if r.travel_approx %}oko {% endif %}{{ r.travel_minutes }} min</strong> {{ r.travel_how }}
+              {% elif r.travel_city_only %}<span class="muted">Put nije poznat: oglas navodi samo grad</span>
+              {% elif r.travel_unknown %}<span class="muted">Put nije izračunat</span>{% endif %}
+            </p>
+            <p class="job__pay">{% if r.pay %}{{ r.pay }}{% else %}<span class="muted">Plaća nije navedena</span>{% endif %}</p>
+            <p class="job__channel">
+              <span class="badge">{{ r.channel_label }}</span>
+              {% if r.status_label %}<span class="badge badge--{{ r.status }}">{{ r.status_label }}</span>{% endif %}
+            </p>
+            <p class="job__age">{{ r.age }}{% if r.source %}<span class="job__source">{{ r.source }}</span>{% endif %}</p>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if filters.view == "otvoreni" and hidden_count > 0 %}
+      <p class="note">Skriveno: {{ hidden_count }} {{ "oglas" if hidden_count % 10 == 1 and hidden_count % 100 != 11 else "oglasa" }} (zanemareni, odgođeni, prijavljeni ili oni koji ne odgovaraju vašem profilu).
+        <a href="/poslovi{{ filters.query(view='sve', page=1) }}">Prikaži sve</a></p>
+    {% endif %}
+
+    {% if inbox.pages > 1 %}
+      <nav class="pager" aria-label="Stranice popisa">
+        {% if inbox.page > 1 %}<a class="btn" rel="prev" href="/poslovi{{ filters.query(page=inbox.page - 1) }}">Prethodna</a>{% endif %}
+        <p>Stranica {{ inbox.page }} od {{ inbox.pages }}</p>
+        {% if inbox.page < inbox.pages %}<a class="btn" rel="next" href="/poslovi{{ filters.query(page=inbox.page + 1) }}">Sljedeća</a>{% endif %}
+      </nav>
+    {% endif %}
+
+  {% elif inbox.total == 0 %}
+    <div class="empty">
+      <p class="empty__title">Još nema spremljenih oglasa.</p>
+      <p>Aplikacija provjerava izvore svakih nekoliko minuta i nove oglase pokazuje ovdje. Ako ste je upravo pokrenuli, pričekajte nekoliko minuta pa osvježite stranicu.</p>
+    </div>
+
+  {% else %}
+    <div class="empty">
+      <p class="empty__title">Nijedan oglas ne odgovara odabranim filterima.</p>
+      {% if filters.view == "otvoreni" and hidden_count > 0 %}
+        <p>Skriveno je {{ hidden_count }} {{ "oglas" if hidden_count % 10 == 1 and hidden_count % 100 != 11 else "oglasa" }} (zanemareni, odgođeni, prijavljeni ili oni koji ne odgovaraju vašem profilu).</p>
+      {% endif %}
+      <p>
+        {% if filters.view != "sve" %}<a href="/poslovi{{ filters.query(view='sve', page=1) }}">Prikaži sve oglase</a> ili {% endif %}<a href="/poslovi">poništite filtere</a>.
+      </p>
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@gmail.com header.s=20230601 header.b=AbCdEfGh;
+       spf=pass smtp.mailfrom=ivan.test@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+From: Ivan Primjer <ivan.test@gmail.com>
+To: ivan.test@gmail.com
+Subject: Re: [87] Konobar vikend - Osijek - e-mail [SJA-@@CODE@@]
+In-Reply-To: @@ALERT_ID@@
+References: @@ALERT_ID@@
+Message-ID: @@MSGID@@
+Date: Tue, 03 Nov 2026 19:05:08 +0100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+da.
+
+uto, 3. stu 2026. u 10:00 Ivan Primjer <ivan.test@gmail.com> napisao je:
+
+> NOVI OGLAS: Konobar vikend

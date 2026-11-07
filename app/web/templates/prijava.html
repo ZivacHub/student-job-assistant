@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% set nav = "prijave" %}
+{% block title %}Prijava: {{ v.job.title }}{% endblock %}
+
+{% macro field_error(errors, key, fid) %}
+  {% if errors[key] %}<p class="field__error" id="{{ fid }}-err">{{ errors[key] }}</p>{% endif %}
+{% endmacro %}
+
+{% block main %}
+  {% set a = v.application %}
+  {% set who = [v.job.employer, v.job.city] | select | list %}
+  <p class="back"><a href="/prijave">Natrag na prijave</a></p>
+
+  <header class="jobhead job--{{ v.job.band }}">
+    <p class="job__score"><span class="visually-hidden">Ocjena: </span>{{ v.job.score if v.job.score is not none else "–" }}</p>
+    <div>
+      <h1 class="jobhead__title">{{ v.job.title }}</h1>
+      {% if who %}<p class="jobhead__who">{{ who | join(" · ") }}</p>{% endif %}
+      <p class="jobhead__badges"><span class="badge badge--{{ a.state }}">{{ v.state_label }}</span></p>
+    </div>
+  </header>
+
+  {% if flash %}<p class="alert alert--ok" role="status">{{ flash }}</p>{% endif %}
+  {% if action_error %}<p class="alert alert--error" role="alert" data-error-summary>{{ action_error }}</p>{% endif %}
+  {% if errors %}
+    <div class="alert alert--error" role="alert" data-error-summary>
+      <p>Poruka nije odobrena ni spremljena. Ispravite:</p>
+      <ul>
+        {% for key, message in errors.items() %}
+          <li>{% if key in ("subject", "body", "cv") %}<a href="#f-{{ key }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  {% if paused %}<p class="alert alert--info">Slanje je zaustavljeno. Ništa ne odlazi dok ga ne pustite na stranici <a href="/prijave#stanje">Prijave</a>.</p>{% endif %}
+
+  <div class="detail detail--single">
+    <section class="section" aria-labelledby="h-poruka">
+      <h2 id="h-poruka">Poruka poslodavcu</h2>
+      <p>Prima: <strong>{{ a.to_email }}</strong> <span class="muted">(e-adresa koja piše u samom oglasu)</span></p>
+
+      {% if v.editable %}
+        {% if v.problems and not errors %}
+          <p class="alert alert--info">
+            {% for key, message in v.problems.items() %}{{ message }}{% if not loop.last %} {% endif %}{% endfor %}
+          </p>
+        {% endif %}
+        {% set f = values if values else {"subject": a.subject, "body": a.body, "cv": (a.cv_id or "") | string} %}
+        <form class="stack" method="post" action="/prijave/{{ a.id }}/odobri" novalidate>
+          <div class="field">
+            <label for="f-subject">Naslov</label>
+            <input id="f-subject" name="subject" type="text" maxlength="150" value="{{ f.subject }}"{% if errors.subject %} aria-invalid="true" aria-describedby="f-subject-err"{% endif %}>
+            {{ field_error(errors, "subject", "f-subject") }}
+          </div>
+          <div class="field">
+            <label for="f-body">Tekst poruke</label>
+            <textarea id="f-body" name="body" class="draft" rows="16" maxlength="4000" aria-describedby="{% if errors.body %}f-body-err {% endif %}f-body-hint"{% if errors.body %} aria-invalid="true"{% endif %}>{{ f.body }}</textarea>
+            {{ field_error(errors, "body", "f-body") }}
+            <p class="hint" id="f-body-hint">Odobravate točno ovaj tekst. Ako ga nakon odobrenja promijenite, odobrenje se poništava.</p>
+          </div>
+          <div class="field">
+            <label for="f-cv">Životopis u privitku</label>
+            <select id="f-cv" name="cv"{% if errors.cv %} aria-invalid="true" aria-describedby="f-cv-err"{% endif %}>
+              <option value="">Bez životopisa</option>
+              {% for cv in v.cvs %}<option value="{{ cv.id }}" {% if (f.cv | string) == (cv.id | string) %}selected{% endif %}>{{ cv.label }} ({{ "hrvatski" if cv.language == "hr" else "engleski" }})</option>{% endfor %}
+            </select>
+            {{ field_error(errors, "cv", "f-cv") }}
+          </div>
+          <div class="actions">
+            <button class="btn btn--primary" type="submit">Odobri ovaj tekst</button>
+            <button class="btn" type="submit" formaction="/prijave/{{ a.id }}/spremi">Spremi izmjene</button>
+            <button class="btn" type="submit" formaction="/prijave/{{ a.id }}/preskoci" formnovalidate>Preskoči</button>
+          </div>
+        </form>
+      {% else %}
+        <dl class="facts">
+          <dt>Naslov</dt><dd>{{ a.subject }}</dd>
+          <dt>Životopis</dt><dd>{{ v.cv_label or "bez životopisa" }}</dd>
+        </dl>
+        <div class="draftbox" tabindex="0" role="group" aria-label="Tekst poruke">{{ a.body }}</div>
+      {% endif %}
+    </section>
+
+    <section class="section" aria-labelledby="h-stanje">
+      <h2 id="h-stanje">Što se događa s ovom porukom</h2>
+      {% if a.state == "queued" %}
+        <p>Čeka Vaše odobrenje. Ništa ne odlazi poslodavcu dok je ne odobrite.</p>
+      {% elif a.state == "approved" and v.dry_run_logged_at %}
+        <p class="alert alert--info">Probno slanje {{ v.dry_run_logged_at }}: poruka je samo zapisana u dnevnik, <strong>ništa nije poslano poslodavcu</strong>.</p>
+        <p class="hint">Kad se stvarno slanje uključi, ovo odobrenje neće vrijediti: tekst ćete odobriti ponovno.</p>
+        {% if v.can_release %}
+          <form method="post" action="/prijave/{{ a.id }}/probno-vrati"><button class="btn" type="submit">Vrati na odobrenje</button></form>
+        {% endif %}
+      {% elif a.state == "approved" and v.can_undo %}
+        <p class="alert alert--ok">Odobreno. Rok za poništavanje traje do <strong>{{ v.undo_until }}</strong>. {% if dry_run %}Poruka će se nakon toga samo zapisati, jer je probni način uključen.{% else %}Nakon toga poruka odlazi.{% endif %}</p>
+        <form method="post" action="/prijave/{{ a.id }}/ponisti"><button class="btn" type="submit">Poništi odobrenje</button></form>
+      {% elif a.state == "approved" %}
+        <p>Odobreno. Rok za poništavanje je istekao.</p>
+        {% if v.blockers %}
+          <p>Zašto poruka još nije otišla:</p>
+          <ul class="reasons">{% for b in v.blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+        {% else %}
+          <p class="muted">{% if not gmail_ready %}Čeka se postavljanje Gmaila.{% else %}Čeka se slanje.{% endif %}</p>
+        {% endif %}
+        {% if v.can_release %}
+          <form method="post" action="/prijave/{{ a.id }}/probno-vrati"><button class="btn" type="submit">Vrati na odobrenje</button></form>
+        {% endif %}
+      {% elif a.state in ("sent", "replied", "interview") %}
+        <p>Poslano {{ v.sent_at }}.</p>
+        {% if v.can_confirm %}
+          <p class="hint">Ako je poslodavac rekao da Vas prima, označite to.</p>
+          <form method="post" action="/prijave/{{ a.id }}/potvrdeno"><button class="btn" type="submit">Poslodavac je potvrdio</button></form>
+        {% endif %}
+      {% elif a.state == "confirmed" %}
+        <p class="alert alert--ok">{{ v.reminder }}</p>
+      {% elif a.state == "skipped" %}
+        <p>Preskočeno. Poruka neće biti poslana.</p>
+        {% if v.can_reopen %}<form method="post" action="/prijave/{{ a.id }}/vrati"><button class="btn" type="submit">Vrati među nacrte koji čekaju</button></form>{% endif %}
+      {% elif a.state == "sending" %}
+        {% if v.sending_stuck %}
+          <p class="alert alert--error">Nije jasno je li poruka poslana: program se zaustavio usred slanja. Provjerite mapu Poslano u Gmailu. Poruka se neće poslati ponovno sama.</p>
+        {% else %}
+          <p class="alert alert--info" role="status">Šalje se upravo sada.</p>
+        {% endif %}
+      {% elif a.state == "failed" %}
+        <p class="alert alert--error">{{ a.error or "Slanje nije uspjelo." }}</p>
+      {% endif %}
+      {% if dry_run and a.state in ("queued", "approved") %}<p class="hint">Probni način je uključen: ništa ne odlazi poslodavcu, poruke se samo zapisuju.</p>{% endif %}
+    </section>
+
+    <section class="section" aria-labelledby="h-oglas">
+      <h2 id="h-oglas">Oglas</h2>
+      <dl class="facts">
+        {% if v.job.pay %}<dt>Plaća</dt><dd>{{ v.job.pay }}</dd>{% endif %}
+        {% if v.job.travel_minutes is not none %}<dt>Put</dt><dd><strong>{% if v.job.travel_approx %}oko {% endif %}{{ v.job.travel_minutes }} min</strong> {{ v.job.travel_how }}</dd>{% endif %}
+        {% if v.job.source %}<dt>Izvor</dt><dd>{{ v.job.source }}</dd>{% endif %}
+      </dl>
+      <p><a class="standalone" href="/poslovi/{{ v.job.id }}">Otvori oglas u aplikaciji</a></p>
+    </section>
+  </div>
+{% endblock %}

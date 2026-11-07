@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% set nav = "poslovi" %}
+{% block title %}{{ d.row.title }}{% endblock %}
+{% block scripts %}<script src="/static/job.js"></script>{% endblock %}
+
+{% macro field_error(errors, key, fid) %}
+  {% if errors[key] %}<p class="field__error" id="{{ fid }}-err">{{ errors[key] }}</p>{% endif %}
+{% endmacro %}
+
+{% block main %}
+  {% set r = d.row %}
+  {% set who = [r.employer, r.city] | select | list %}
+  {% set cv = company_values if company_values else {
+       "phone": (d.company.phone if d.company and d.company.phone else ""),
+       "director_name": (d.company.director_name if d.company and d.company.director_name else ""),
+       "director_role": (d.company.director_role if d.company and d.company.director_role else ""),
+       "note": (d.company.note if d.company and d.company.note else "") } %}
+
+  <p class="back"><a href="/poslovi">Natrag na poslove</a></p>
+
+  <header class="jobhead job--{{ r.band }}">
+    <p class="job__score"><span class="visually-hidden">Ocjena: </span>{{ r.score if r.score is not none else "–" }}</p>
+    <div>
+      <h1 class="jobhead__title">{{ r.title }}</h1>
+      {% if who %}<p class="jobhead__who">{{ who | join(" · ") }}</p>{% endif %}
+      <p class="jobhead__badges">
+        <span class="badge">{{ r.channel_label }}</span>
+        {% if r.status_label %}<span class="badge badge--{{ r.status }}">{{ r.status_label }}</span>{% endif %}
+      </p>
+    </div>
+  </header>
+
+  {% if flash %}<p class="alert alert--ok" role="status">{{ flash }}</p>{% endif %}
+  {% if action_error %}<p class="alert alert--error" role="alert" data-error-summary>{{ action_error }}</p>{% endif %}
+  {# the state note would only repeat the message after ignore / applied / bring back #}
+  {% if d.status_note and not (flash and flash_key in ("zanemari", "prijavljeno", "vrati")) %}<p class="alert alert--info">{{ d.status_note }}</p>{% endif %}
+
+  <div class="detail">
+
+    {# ---------- how to apply + what to do with the ad ---------- #}
+    <div class="detail__act">
+      <section class="section" aria-labelledby="h-javi">
+        <h2 id="h-javi">Kako se javiti</h2>
+        {% if d.phones or d.emails or d.links or r.url %}
+          <ul class="contact-list">
+            {% for p in d.phones %}
+              <li>
+                <strong>{{ p.shown }}</strong>
+                {% if p.href %}<a href="{{ p.href }}">Nazovi<span class="visually-hidden"> {{ p.shown }}</span></a>{% endif %}
+                {% if not p.from_ad %}<span class="muted">(upisali ste ručno)</span>{% endif %}
+              </li>
+            {% endfor %}
+            {% for e in d.emails %}
+              <li>E-pošta: <strong>{{ e.shown }}</strong></li>
+            {% endfor %}
+            {% for l in d.links %}
+              <li>{% if l.href %}<a href="{{ l.href }}" target="_blank" rel="noopener noreferrer">{{ l.shown }}<span class="visually-hidden"> (otvara se u novoj kartici)</span></a>{% else %}{{ l.shown }}{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% if d.emails %}
+            <p class="hint">Slanje e-pošte poslodavcu još nije uključeno u aplikaciji. Kad bude, ništa neće otići bez vašeg odobrenja tog točnog teksta.</p>
+          {% endif %}
+          {% if d.application %}
+            <p class="draftnote">Nacrt poruke poslodavcu: <strong>{{ d.application_label }}</strong>. <a href="/prijave/{{ d.application.id }}">Otvori nacrt</a></p>
+          {% elif d.can_draft %}
+            {% if d.draft_reason %}<p class="hint">{{ d.draft_reason }} Nacrt možete ipak pripremiti sami.</p>{% endif %}
+            <form method="post" action="/poslovi/{{ r.id }}/nacrt"><button class="btn" type="submit">Pripremi nacrt poruke</button></form>
+          {% endif %}
+          {% if r.url %}
+            <p><a class="btn btn--primary" href="{{ r.url }}" target="_blank" rel="noopener noreferrer">Otvori izvorni oglas<span class="visually-hidden"> (otvara se u novoj kartici)</span></a></p>
+          {% endif %}
+        {% else %}
+          <p>U oglasu nije naveden način prijave. Za više podataka potražite poslodavca u okviru „Podaci o poslodavcu“.</p>
+        {% endif %}
+      </section>
+
+      <section class="section" aria-labelledby="h-radnje">
+        <h2 id="h-radnje">Što ćete s ovim oglasom?</h2>
+        <div class="actions">
+          {% if "nazvano" in d.actions %}
+            <form method="post" action="/poslovi/{{ r.id }}/radnja">
+              <input type="hidden" name="akcija" value="nazvano">
+              <button class="btn btn--primary" type="submit">Nazvao/la sam</button>
+            </form>
+          {% endif %}
+          {% if "prijavljeno" in d.actions %}
+            <form method="post" action="/poslovi/{{ r.id }}/radnja">
+              <input type="hidden" name="akcija" value="prijavljeno">
+              <button class="btn {% if "nazvano" not in d.actions %}btn--primary{% endif %}" type="submit">{% if r.channel == "site" %}Prijavio/la sam se na stranici{% else %}Prijavio/la sam se{% endif %}</button>
+            </form>
+          {% endif %}
+          {% if "odgodi" in d.actions %}
+            <form class="actions" method="post" action="/poslovi/{{ r.id }}/radnja">
+              <input type="hidden" name="akcija" value="odgodi">
+              {% for key, label in snooze_choices.items() %}
+                <button class="btn" type="submit" name="trajanje" value="{{ key }}">Odgodi: {{ label | lower }}</button>
+              {% endfor %}
+            </form>
+          {% endif %}
+          {% if "zanemari" in d.actions %}
+            <form method="post" action="/poslovi/{{ r.id }}/radnja">
+              <input type="hidden" name="akcija" value="zanemari">
+              <button class="btn" type="submit">Zanemari</button>
+            </form>
+          {% endif %}
+          {% if "vrati" in d.actions %}
+            <form method="post" action="/poslovi/{{ r.id }}/radnja">
+              <input type="hidden" name="akcija" value="vrati">
+              <button class="btn" type="submit">Vrati među otvorene</button>
+            </form>
+          {% endif %}
+        </div>
+        <p class="hint">Ovo mijenja samo stanje oglasa u ovoj aplikaciji. Nikome se ništa ne šalje.</p>
+      </section>
+    </div>
+
+    {# ---------- the ad itself ---------- #}
+    <div class="detail__body">
+      <section class="section" aria-labelledby="h-podaci">
+        <h2 id="h-podaci">Podaci</h2>
+        <dl class="facts">
+          {% if r.pay %}<dt>Plaća</dt><dd>{{ r.pay }}</dd>{% else %}<dt>Plaća</dt><dd class="muted">nije navedena</dd>{% endif %}
+          {% if r.travel_minutes is not none %}<dt>Put</dt><dd><strong>{% if r.travel_approx %}oko {% endif %}{{ r.travel_minutes }} min</strong> {{ r.travel_how }}</dd>
+          {% elif r.travel_city_only %}<dt>Put</dt><dd class="muted">nije poznat: oglas navodi samo grad{% if r.city %} ({{ r.city }}){% endif %}, pa se vrijeme puta ne može izračunati. Točnu adresu potražite u oglasu.</dd>
+          {% elif r.travel_unknown %}<dt>Put</dt><dd class="muted">nije izračunat (dodajte svoje mjesto u „Mjesta i profil“)</dd>{% endif %}
+          {% if r.city %}<dt>Mjesto</dt><dd>{{ r.city }}{% if d.job.address %}, {{ d.job.address }}{% endif %}</dd>{% endif %}
+          {% if d.category %}<dt>Vrsta posla</dt><dd>{{ d.category }}</dd>{% endif %}
+          {% if d.posted %}<dt>Objavljeno</dt><dd>{{ d.posted }}{% if r.age %} <span class="muted">({{ r.age }})</span>{% endif %}</dd>{% endif %}
+          {% if d.expires %}<dt>Rok prijave</dt><dd>{{ d.expires }}</dd>{% endif %}
+          {% if r.source %}<dt>Izvor</dt><dd>{{ r.source }}</dd>{% endif %}
+        </dl>
+      </section>
+
+      {% if d.reasons %}
+        <section class="section" aria-labelledby="h-zasto">
+          <h2 id="h-zasto">Zašto ova ocjena</h2>
+          <ul class="reasons">
+            {% for line in d.reasons %}<li>{{ line }}</li>{% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+
+      <section class="section" aria-labelledby="h-opis">
+        <h2 id="h-opis">Opis oglasa</h2>
+        {% if d.description %}
+          <div class="desc">{{ d.description }}</div>
+        {% else %}
+          <p class="muted">Oglas nema opis. Otvorite izvorni oglas.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    {# ---------- employer box + text to copy ---------- #}
+    <div class="detail__extra">
+      <section class="section" id="poslodavac" aria-labelledby="h-poslodavac">
+        <h2 id="h-poslodavac">Podaci o poslodavcu</h2>
+        {% if not r.employer %}
+          <p class="muted">Oglas ne navodi poslodavca, pa ovdje nema što upisati.</p>
+          {% if errors.employer %}<p class="alert alert--error" role="alert" data-error-summary>{{ errors.employer }}</p>{% endif %}
+        {% else %}
+          <p class="section__intro">Ako u oglasu nema telefona, potražite tvrtku na CompanyWall pa ovdje upišite što nađete. Stranica se otvara u vašem pregledniku; aplikacija sama ništa ne dohvaća s CompanyWalla.</p>
+          {% if d.companywall_url %}
+            <p><a class="btn" href="{{ d.companywall_url }}" target="_blank" rel="noopener noreferrer">Otvori na CompanyWall<span class="visually-hidden"> (otvara se u novoj kartici)</span></a></p>
+          {% endif %}
+          <form class="stack" method="post" action="/poslovi/{{ r.id }}/poslodavac" novalidate>
+            {% if errors %}
+              <div class="alert alert--error" role="alert" data-error-summary>
+                <p>Podaci nisu spremljeni. Ispravite:</p>
+                <ul>
+                  {% for key, message in errors.items() %}
+                    <li><a href="#{{ 'f-phone' if key == 'phone' else 'f-director' }}">{{ message }}</a></li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
+            <div class="field">
+              <label for="f-phone">Telefon poslodavca</label>
+              <input id="f-phone" name="phone" type="text" inputmode="tel" autocomplete="off" maxlength="40"
+                     value="{{ cv.phone }}" placeholder="npr. 031 123 456"
+                     aria-describedby="{% if errors.phone %}f-phone-err {% endif %}f-phone-hint"{% if errors.phone %} aria-invalid="true"{% endif %}>
+              {{ field_error(errors, "phone", "f-phone") }}
+              <p class="hint" id="f-phone-hint">Ostavite prazno ako ga nemate. Ovaj broj nije iz oglasa, pa se tako i označava.</p>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="f-director">Ime direktora</label>
+                <input id="f-director" name="director_name" type="text" maxlength="{{ max_name }}" value="{{ cv.director_name }}" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="f-role">Funkcija</label>
+                <input id="f-role" name="director_role" type="text" maxlength="{{ max_name }}" value="{{ cv.director_role }}" placeholder="npr. direktor" autocomplete="off">
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-note">Napomena</label>
+              <textarea id="f-note" name="note" maxlength="{{ max_note }}" rows="3">{{ cv.note }}</textarea>
+            </div>
+            <div class="actions"><button class="btn btn--primary" type="submit">Spremi podatke</button></div>
+          </form>
+        {% endif %}
+      </section>
+
+      <section class="section" aria-labelledby="h-kopija">
+        <h2 id="h-kopija">Tekst za kopiranje</h2>
+        <p class="section__intro">Isti sažetak oglasa kakav bi stigao u obavijesti: opis, razlozi ocjene i kako se javiti.</p>
+        <textarea id="alert-text" class="copybox" readonly rows="14" aria-label="Tekst oglasa za kopiranje">{{ d.alert_text }}</textarea>
+        <div class="actions">
+          <button class="btn" type="button" data-copy-from="alert-text" hidden>Kopiraj tekst</button>
+          <span class="copy-status" role="status" data-copy-status="alert-text"></span>
+        </div>
+      </section>
+    </div>
+
+  </div>
+{% endblock %}
